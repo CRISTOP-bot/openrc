@@ -4,6 +4,21 @@ OpenRC README
 OpenRC is a dependency-based init system that works with the
 system-provided init program, normally `/sbin/init`.
 
+## NEWOS port status
+
+This personal fork is the development base for adapting OpenRC to NEWOS. The
+`newos-port` branch tracks that work separately from the upstream mirror.
+OpenRC is **not yet ported or usable as NEWOS init**: NEWOS currently lacks
+several process-lifecycle and POSIX interfaces required by OpenRC, including
+`fork`/`execve` and signal delivery. See [`PORTING-NEWOS.md`](PORTING-NEWOS.md)
+for verified ABI findings, the staged implementation plan, and acceptance
+tests. Do not install this branch as PID 1 until those gates are implemented
+and the NEWOS QEMU boot suite passes.
+
+NEWOS-specific work is confined to this fork and the NEWOS component
+repositories that own the required kernel, ABI, libc, and shell changes; it is
+not being submitted to the original OpenRC repository.
+
 ## building and installing
 
 OpenRC uses the  [meson](http://mesonbuild.com) build system, so use the
