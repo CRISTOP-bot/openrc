@@ -80,6 +80,36 @@ success or claim services started when they were not.
    existing NEWOS kernel and userland regression tests. A host build or source
    inspection alone is not a boot test.
 
+
+## Repository ownership map for the implementation
+
+The port spans repositories; this fork cannot implement kernel-owned semantics
+by itself. The current NEWOS superproject pins these as separate components.
+
+| OpenRC requirement | Current NEWOS baseline | Owning component / needed work |
+| --- | --- | --- |
+| PID 1 keeps running and adopts/reaps descendants | The kernel launches one init process; when that process exits, boot returns to the kernel path. No orphan adoption contract is documented. | `NEWOS-kernel`: stable PID-1 lifetime, parent/adoption policy, wait for any adopted child, reaping and shutdown behavior; add phase tests. |
+| Start a service with argv and redirected stdio | `SYS_SPAWN2`/`SYS_SPAWN3` create a child ELF with argv and stdin/stdout inheritance; no fork/exec API. | `NEWOS-kernel` + `NEWOS-userland`: define a supported spawn/descriptor contract and use it in the OpenRC adapter; explicitly resolve stderr, close-on-exec and process-group requirements. |
+| Service exit status and supervision | `SYS_WAITPID` waits for one child and returns a legacy exit code (or a POSIX-like status when a status pointer is supplied); `SYS_PS` exposes process records. | `NEWOS-kernel`: parent-child authorization, wait semantics, child-state lifetime, nonblocking wait if needed; exercise normal exit, fault, termination, and repeated reaping. |
+| Stop/reload through POSIX signals | `SYS_KILL` terminates a process with a fixed signal-style exit code; signal handlers and delivery do not exist. | `NEWOS-kernel` + ABI: pending/delivered signals, masks/dispositions, interruption rules, process groups and tests; never map TERM to immediate KILL while claiming graceful shutdown. |
+| Replace PID 1 / shutdown | Current ABI/kernel path has no OpenRC-compatible reboot/poweroff syscall contract. | `NEWOS-kernel` + boot integration: privileged shutdown/reboot request, controlled init handoff, rescue path and QEMU tests. |
+| Service scripts and environment | The native `nsh` can run simple `/nsh.rc` command lines, but it is not a POSIX shell and NEWOS does not ship a complete POSIX shell runtime. | `NEWOS-userland`/ports: provide the real script interpreter and required shell semantics, or define a documented OpenRC service format that preserves OpenRC dependency/state behavior. Do not silently parse arbitrary scripts as `nsh`. |
+| OpenRC C runtime dependencies | NEWOS libc is freestanding and intentionally small; its headers do not provide the full POSIX surface used by OpenRC. | `NEWOS-userland`/toolchain: implement and test required libc/POSIX interfaces or add a deliberate, audited subset and configure OpenRC to exclude only optional modules. |
+| Persistent runlevel/service state | NEWOS has filesystem work in progress and the changelog/roadmap describe persistence boundaries; in-memory state alone cannot survive reboot. | `NEWOS-kernel` storage/VFS + OpenRC port: define volatile versus durable state and test recovery; do not claim persistence until reboot tests pass. |
+
+## First executable milestone
+
+Before attempting the full service graph, the first code milestone should be an
+OpenRC-owned NEWOS platform adapter that builds against the *real* NEWOS SDK,
+starts one compiled test service by path/argv, records its actual child PID and
+exit status through the supported ABI, and reports failure truthfully. The
+matching QEMU test must prove the service ran and the status was observed. It
+must not be wired as PID 1 yet. Only after that works should the adapter grow
+into dependency-ordered `sysinit`/`boot`/`default` runlevels and then PID-1
+shutdown/reaping.
+
+No such adapter or executable milestone has been implemented in this commit.
+
 ## Scope and attribution
 
 This is a fork of OpenRC; preserve upstream copyright notices and the
